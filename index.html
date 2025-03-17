@@ -14,7 +14,7 @@
     </style>
 </head>
 <body>
-    <h2>Complemento de Prueba</h2>
+    <h2>Complemento de Prueba v1</h2>
     <button id="runButton">Escribir en A1</button>
     <button id="getFolderIdButton">Listar Archivos en Excel</button>
     <div id="status">Cargando Office.js...</div>
@@ -95,30 +95,29 @@
                 const arrayBuffer = await response.arrayBuffer();
                 const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
                 let foundText = "";
-                const regex = /(asignatura|materia)\s*[:]*\s*([^\s]+)/i;
+                const regex = /(asignatura|materia)\s*:\s*[A-Z0-9-]+\s+(.+)/i;
                 for (let i = 1; i <= pdf.numPages; i++) {
                     const page = await pdf.getPage(i);
                     const textContent = await page.getTextContent();
                     console.log(`Página ${i} procesada, items encontrados: ${textContent.items.length}`);
-                    textContent.items.forEach(item => {
+                    for (const item of textContent.items) {
                         const text = item.str.toLowerCase();
                         console.log(`Texto en item: "${item.str}"`);
                         if (text.includes("asignatura") || text.includes("materia")) {
                             console.log(`"asignatura" o "materia" encontrada en: "${item.str}"`);
-                            const match = text.match(regex);
+                            const match = item.str.match(regex);
                             if (match && match[2]) {
                                 foundText = match[2].toUpperCase();
-                                console.log(`Texto siguiente capturado: "${foundText}"`);
+                                console.log(`Texto siguiente capturado después del patrón: "${foundText}"`);
+                                return foundText; // Finaliza la búsqueda en este PDF
                             } else {
-                                console.log("No se pudo capturar texto siguiente a 'asignatura' o 'materia'");
+                                console.log("No se pudo capturar texto después del patrón en: ", item.str);
                             }
                         }
-                    });
+                    }
                 }
-                if (!foundText) {
-                    console.log("No se encontró 'asignatura' ni 'materia' en el PDF");
-                }
-                return foundText || "Error";
+                console.log("No se encontró 'asignatura' ni 'materia' con el patrón en el PDF");
+                return "Error";
             } catch (error) {
                 console.error("Error al procesar PDF con pdf.js:", error);
                 return "Error";
@@ -155,6 +154,7 @@
             range.format.borders.getItem("EdgeLeft").style = "Continuous";
             range.format.borders.getItem("EdgeRight").style = "Continuous";
             range.format.borders.getItem("EdgeTop").style = "Continuous";
+            range.format.borders.getItem("EdgeBottom").style = "Continuous";
             range.format.borders.getItem("InsideHorizontal").style = "Continuous";
             range.format.borders.getItem("InsideVertical").style = "Continuous";
             range.format.horizontalAlignment = "Center";
