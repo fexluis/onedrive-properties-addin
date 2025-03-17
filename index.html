@@ -14,7 +14,7 @@
     </style>
 </head>
 <body>
-    <h2>Complemento de Prueba v1</h2>
+    <h2>Complemento de Prueba</h2>
     <button id="runButton">Escribir en A1</button>
     <button id="getFolderIdButton">Listar Archivos en Excel</button>
     <div id="status">Cargando Office.js...</div>
@@ -72,6 +72,21 @@
             }
         }
 
+        async function getPDFPageCount(url, accessToken) {
+            console.log(`Obteniendo número de páginas para ${url}`);
+            try {
+                const response = await fetch(url, { headers: { "Authorization": `Bearer ${accessToken}` } });
+                if (!response.ok) throw new Error(`Error al descargar PDF: ${response.statusText}`);
+                const arrayBuffer = await response.arrayBuffer();
+                const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                console.log(`Páginas contadas: ${pdf.numPages}`);
+                return pdf.numPages;
+            } catch (error) {
+                console.error("Error al contar páginas con pdf.js:", error);
+                return "Error";
+            }
+        }
+
         async function getPDFText(url, accessToken) {
             console.log(`Buscando texto en ${url}`);
             try {
@@ -80,7 +95,7 @@
                 const arrayBuffer = await response.arrayBuffer();
                 const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
                 let foundText = "";
-                const regex = /asignatura\s*([^\s]+)/i;
+                const regex = /(asignatura|materia)\s*[:]*\s*([^\s]+)/i;
                 for (let i = 1; i <= pdf.numPages; i++) {
                     const page = await pdf.getPage(i);
                     const textContent = await page.getTextContent();
@@ -88,20 +103,20 @@
                     textContent.items.forEach(item => {
                         const text = item.str.toLowerCase();
                         console.log(`Texto en item: "${item.str}"`);
-                        if (text.includes("asignatura")) {
-                            console.log(`"asignatura" encontrada en: "${item.str}"`);
+                        if (text.includes("asignatura") || text.includes("materia")) {
+                            console.log(`"asignatura" o "materia" encontrada en: "${item.str}"`);
                             const match = text.match(regex);
-                            if (match && match[1]) {
-                                foundText = match[1].toUpperCase();
+                            if (match && match[2]) {
+                                foundText = match[2].toUpperCase();
                                 console.log(`Texto siguiente capturado: "${foundText}"`);
                             } else {
-                                console.log("No se pudo capturar texto siguiente a 'asignatura'");
+                                console.log("No se pudo capturar texto siguiente a 'asignatura' o 'materia'");
                             }
                         }
                     });
                 }
                 if (!foundText) {
-                    console.log("No se encontró 'asignatura' en el PDF");
+                    console.log("No se encontró 'asignatura' ni 'materia' en el PDF");
                 }
                 return foundText || "Error";
             } catch (error) {
@@ -226,6 +241,7 @@
                     let newFileName = item.name || "Sin nombre";
                     if (extension === "PDF" && !item.folder) {
                         const contentUrl = `https://graph.microsoft.com/v1.0/drives/${fileDriveId}/items/${item.id}/content`;
+                        pageCount = await getPDFPageCount(contentUrl, accessToken);
                         const foundText = await getPDFText(contentUrl, accessToken);
                         if (foundText !== "Error") {
                             newFileName = `${nameWithoutExtension}_${foundText}`;
