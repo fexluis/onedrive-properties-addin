@@ -84,15 +84,24 @@
                 for (let i = 1; i <= pdf.numPages; i++) {
                     const page = await pdf.getPage(i);
                     const textContent = await page.getTextContent();
+                    console.log(`Página ${i} procesada, items encontrados: ${textContent.items.length}`);
                     textContent.items.forEach(item => {
                         const text = item.str.toLowerCase();
+                        console.log(`Texto en item: "${item.str}"`);
                         if (text.includes("asignatura")) {
+                            console.log(`"asignatura" encontrada en: "${item.str}"`);
                             const match = text.match(regex);
                             if (match && match[1]) {
                                 foundText = match[1].toUpperCase();
+                                console.log(`Texto siguiente capturado: "${foundText}"`);
+                            } else {
+                                console.log("No se pudo capturar texto siguiente a 'asignatura'");
                             }
                         }
                     });
+                }
+                if (!foundText) {
+                    console.log("No se encontró 'asignatura' en el PDF");
                 }
                 return foundText || "Error";
             } catch (error) {
