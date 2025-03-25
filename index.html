@@ -14,7 +14,7 @@
     </style>
 </head>
 <body>
-    <h2>Complemento de Prueba v2</h2>
+    <h2>Complemento de Prueba v3</h2>
     <button id="runButton">Escribir en A1</button>
     <button id="getFolderIdButton">Listar Archivos en Excel</button>
     <div id="status">Cargando Office.js...</div>
@@ -175,6 +175,11 @@
             }
         }
 
+        // Nueva función para separar palabras basadas en mayúsculas
+        function separateCamelCase(text) {
+            return text.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/([A-Z])([A-Z][a-z])/g, '$1 $2');
+        }
+
         async function listFilesInParentFolder() {
             let statusMessage = "";
             try {
@@ -249,7 +254,7 @@
                     }
 
                     const fileNameParts = nameWithoutExtension.split("_");
-                    const columnCValue = fileNameParts.length > 1 ? fileNameParts[1].toUpperCase() : nameWithoutExtension;
+                    const columnCValue = fileNameParts.length > 1 ? separateCamelCase(fileNameParts[1]) : separateCamelCase(nameWithoutExtension);
 
                     return [
                         newFileName,                       // Columna B
