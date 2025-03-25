@@ -14,7 +14,7 @@
     </style>
 </head>
 <body>
-    <h2>Complemento de Prueba v76</h2>
+    <h2>Complemento de Prueba v2</h2>
     <button id="runButton">Escribir en A1</button>
     <button id="getFolderIdButton">Listar Archivos en Excel</button>
     <button id="formatDateButton">Formato Fecha</button>
@@ -152,6 +152,11 @@
             return `${year}${month}${day}`;
         }
 
+        function isYYYYMMDD(value) {
+            const regex = /^\d{8}$/;
+            return regex.test(value);
+        }
+
         function showWaitingGif(message) {
             document.getElementById("status").innerHTML = `${message}<br><img src="${waitingGif}" alt="Esperando...">`;
         }
@@ -229,7 +234,7 @@
                 document.getElementById("status").innerHTML = statusMessage;
 
                 showWaitingGif("Listando archivos en la carpeta padre...");
-                const childrenData = await fetchWithAuth(`https://graph.microsoft.com/v1.0/drives/${fileDriveId}/items/${parentFolderId}/children`, accessToken, "Error al listar archivos");
+                const childrenData = await fetchWithAuth(`https://graph.microsoft.com/v1.0/drives/${fileDriveId}/items/${parentFolderId}/children`, accessToken, "Error al listarValue: listar archivos");
 
                 const files = childrenData.value.filter(item => {
                     const ext = item.name.includes('.') && !item.folder ? item.name.split('.').pop().toLowerCase() : "";
@@ -365,20 +370,28 @@
                     await context.sync();
 
                     const values = range.values;
+                    let alreadyFormatted = 0;
+                    let totalCells = 0;
+
                     for (let row = 0; row < values.length; row++) {
                         for (let col = 0; col < values[row].length; col++) {
                             const cellValue = values[row][col];
                             if (cellValue) {
-                                try {
-                                    const date = new Date(cellValue);
-                                    if (!isNaN(date.getTime())) {
-                                        const formattedDate = formatDate(date);
-                                        values[row][col] = formattedDate;
-                                    } else {
-                                        console.warn(`Valor no es una fecha válida en E${10 + row}:F${10 + row}: "${cellValue}"`);
+                                totalCells++;
+                                if (isYYYYMMDD(cellValue)) {
+                                    alreadyFormatted++;
+                                } else {
+                                    try {
+                                        const date = new Date(cellValue);
+                                        if (!isNaN(date.getTime())) {
+                                            const formattedDate = formatDate(date);
+                                            values[row][col] = formattedDate;
+                                        } else {
+                                            console.warn(`Valor no es una fecha válida en E${10 + row}:F${10 + row}: "${cellValue}"`);
+                                        }
+                                    } catch (error) {
+                                        console.warn(`Error al convertir fecha en E${10 + row}:F${10 + row}: "${cellValue}"`, error);
                                     }
-                                } catch (error) {
-                                    console.warn(`Error al convertir fecha en E${10 + row}:F${10 + row}: "${cellValue}"`, error);
                                 }
                             }
                         }
@@ -386,7 +399,15 @@
 
                     range.values = values;
                     await context.sync();
-                    document.getElementById("status").innerHTML = "Formato de fechas aplicado en E10:F29.";
+
+                    if (alreadyFormatted === totalCells && totalCells > 0) {
+                        document.getElementById("status").innerHTML = "Todas las fechas ya estaban en formato YYYYMMDD.";
+                    } else if (totalCells > 0) {
+                        const formattedCount = totalCells - alreadyFormatted;
+                        document.getElementById("status").innerHTML = `Formato de fechas aplicado en E10:F29. ${formattedCount} celdas formateadas, ${alreadyFormatted} ya estaban en formato correcto.`;
+                    } else {
+                        document.getElementById("status").innerHTML = "No se encontraron valores para formatear en E10:F29.";
+                    }
                 });
             } catch (error) {
                 document.getElementById("status").innerHTML = `Error al formatear fechas: ${error.message}`;
