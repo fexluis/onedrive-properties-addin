@@ -63,7 +63,25 @@
 
         async function getPDFText(url, accessToken) { /* ... (sin cambios) */ }
 
-        async function fetchWithAuth(url, accessToken, errorMessage) { /* ... (sin cambios) */ }
+        async function fetchWithAuth(url, accessToken, errorMessage) {
+            console.log(`Solicitando ${url}`);
+            const response = await fetch(url, { headers: { "Authorization": `Bearer ${accessToken}` } });
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error(`Error en ${url}: ${response.status} - ${errorText}`);
+                if (response.status === 401) {
+                    console.log("Token no válido. Solicitando nuevo token...");
+                    localStorage.removeItem("accessToken");
+                    await initiateOAuthFlow();
+                    throw new Error("Reautenticación requerida");
+                }
+                throw new Error(`${errorMessage}: ${response.status} - ${errorText}`);
+            }
+            const data = await response.json();
+            if (!data) throw new Error(`${errorMessage}: Respuesta vacía`);
+            console.log(`Respuesta recibida de ${url}:`, data);
+            return data;
+        }
 
         function formatDate(date) { /* ... (sin cambios) */ }
 
@@ -73,7 +91,6 @@
 
         async function writeDataToSheet(context, sheet, data, startRow, files, fileStartIndex) { /* ... (sin cambios) */ }
 
-        // Función para separar palabras basadas en mayúsculas
         function separateCamelCase(text) {
             return text.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/([A-Z])([A-Z][a-z])/g, '$1 $2');
         }
@@ -102,19 +119,27 @@
 
                 showWaitingGif("Obteniendo drive raíz...");
                 const rootData = await fetchWithAuth("https://graph.microsoft.com/v1.0/me/drive/root", accessToken, "Error al obtener la raíz");
+                if (!rootData || !rootData.parentReference) {
+                    throw new Error("Respuesta de raíz inválida: parentReference no disponible");
+                }
                 const driveId = rootData.parentReference.driveId;
                 statusMessage += `<br>Drive ID de la raíz: ${driveId}`;
                 document.getElementById("status").innerHTML = statusMessage;
 
                 showWaitingGif("Buscando archivo reciente...");
                 const recentData = await fetchWithAuth("https://graph.microsoft.com/v1.0/me/drive/recent", accessToken, "Error al obtener archivos recientes");
+                if (!recentData || !recentData.value) {
+                    throw new Error("Respuesta de recientes inválida: value no disponible");
+                }
                 const file = recentData.value.find(item => item.name === fileName && item.file);
                 if (!file) {
                     statusMessage += "<br>Archivo no encontrado en recientes.";
                     document.getElementById("status").innerHTML = statusMessage;
                     return;
                 }
-
+                if (!file.parentReference) {
+                    throw new Error(`Archivo ${fileName} no tiene parentReference`);
+                }
                 const parentFolderId = file.parentReference.id;
                 const fileDriveId = file.parentReference.driveId;
                 statusMessage = `ID de la carpeta padre: ${parentFolderId}`;
@@ -155,16 +180,16 @@
                     const columnCValue = fileNameParts.length > 1 ? separateCamelCase(fileNameParts[1]) : separateCamelCase(nameWithoutExtension);
 
                     return [
-                        newFileName,                       // Columna B
-                        columnCValue,                      // Columna C
-                        "N/A",                             // Columna D
-                        formattedCreateDate,               // Columna E
-                        formattedModifiedDate,             // Columna F
-                        1,                                 // Columna G
-                        pageCount,                         // Columna H
-                        extension,                         // Columna I
-                        `${sizeInKB.toFixed(2)} KB`,       // Columna J
-                        item.name || "Sin nombre"          // Columna K
+                        newFileName,
+                        columnCValue,
+                        "N/A",
+                        formattedCreateDate,
+                        formattedModifiedDate,
+                        1,
+                        pageCount,
+                        extension,
+                        `${sizeInKB.toFixed(2)} KB`,
+                        item.name || "Sin nombre"
                     ];
                 });
 
@@ -217,6 +242,96 @@
         }
 
         function initiateOAuthFlow() { /* ... (sin cambios) */ }
+
+        // Service Worker integrado
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                const swCode = `
+                    const CACHE_NAME = 'onedrive-properties-v1.0.6.3';
+                    const urlsToCache = [
+                        '/onedrive-properties-addin/',
+                        '/onedrive-properties-addin/index.html',
+                        'https://appsforoffice.microsoft.com/lib/1/hosted/office.js',
+                        'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.min.js'
+                    ];
+
+                    self.addEventListener('install', event => {
+                        event.waitUntil(
+                            caches.open(CACHE_NAME)
+                                .then(cache => {
+                                    console.log('Service Worker: Instalando y cacheando recursos');
+                                    return cache.addAll(urlsToCache);
+                                })
+                                .then(() => self.skipWaiting())
+                        );
+                    });
+
+                    self.addEventListener('activate', event => {
+                        event.waitUntil(
+                            caches.keys().then(cacheNames => {
+                                return Promise.all(
+                                    cacheNames
+                                        .filter(name => name !== CACHE_NAME)
+                                        .map(name => caches.delete(name))
+                                );
+                            }).then(() => self.clients.claim())
+                        );
+                    });
+
+                    self.addEventListener('fetch', event => {
+                        const requestUrl = new URL(event.request.url);
+                        if (event.request.method !== 'GET' || 
+                            (!requestUrl.href.startsWith('https://fexluis.github.io/') && 
+                             !urlsToCache.includes(requestUrl.href))) {
+                            event.respondWith(fetch(event.request));
+                            return;
+                        }
+
+                        event.respondWith(
+                            caches.match(event.request)
+                                .then(cachedResponse => {
+                                    const networkFetch = fetch(event.request)
+                                        .then(response => {
+                                            if (response.ok) {
+                                                return caches.open(CACHE_NAME).then(cache => {
+                                                    cache.put(event.request, response.clone());
+                                                    return response;
+                                                });
+                                            }
+                                            return response;
+                                        })
+                                        .catch(() => cachedResponse);
+                                    return cachedResponse || networkFetch;
+                                })
+                        );
+                    });
+
+                    self.addEventListener('message', event => {
+                        if (event.data === 'skipWaiting') {
+                            self.skipWaiting();
+                        }
+                    });
+                `;
+
+                const blob = new Blob([swCode], { type: 'application/javascript' });
+                const swUrl = URL.createObjectURL(blob);
+
+                navigator.serviceWorker.register(swUrl)
+                    .then(registration => {
+                        console.log('Service Worker registrado con éxito:', registration);
+                        registration.addEventListener('updatefound', () => {
+                            const newWorker = registration.installing;
+                            newWorker.addEventListener('statechange', () => {
+                                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                    newWorker.postMessage('skipWaiting');
+                                    window.location.reload();
+                                }
+                            });
+                        });
+                    })
+                    .catch(error => console.error('Error al registrar Service Worker:', error));
+            });
+        }
     </script>
 </body>
 </html>
