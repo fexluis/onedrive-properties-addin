@@ -14,9 +14,10 @@
     </style>
 </head>
 <body>
-    <h2>Complemento de Prueba v2</h2>
+    <h2>Complemento de Prueba v76</h2>
     <button id="runButton">Escribir en A1</button>
     <button id="getFolderIdButton">Listar Archivos en Excel</button>
+    <button id="formatDateButton">Formato Fecha</button>
     <div id="status">Cargando Office.js...</div>
 
     <script type="text/javascript">
@@ -51,10 +52,13 @@
         officeReady.then(() => {
             const runButton = document.getElementById("runButton");
             const getFolderIdButton = document.getElementById("getFolderIdButton");
+            const formatDateButton = document.getElementById("formatDateButton");
             runButton.disabled = false;
             getFolderIdButton.disabled = false;
+            formatDateButton.disabled = false;
             runButton.onclick = run;
             getFolderIdButton.onclick = listFilesInParentFolder;
+            formatDateButton.onclick = formatDatesInRange;
         });
 
         async function run() {
@@ -109,7 +113,7 @@
                             if (match && match[2]) {
                                 foundText = match[2].toUpperCase();
                                 console.log(`Texto siguiente capturado: "${foundText}"`);
-                                return foundText; // Finaliza la búsqueda en este PDF
+                                return foundText;
                             } else {
                                 console.log("No se pudo capturar texto después del patrón en: ", text);
                             }
@@ -145,7 +149,7 @@
             const year = date.getFullYear().toString();
             const month = (date.getMonth() + 1).toString().padStart(2, '0');
             const day = date.getDate().toString().padStart(2, '0');
-            return `${year}${month}${day}`; // Formato YYYYMMDD, e.g., "20241201"
+            return `${year}${month}${day}`;
         }
 
         function showWaitingGif(message) {
@@ -259,16 +263,16 @@
                     const columnCValue = fileNameParts.length > 1 ? separateCamelCase(fileNameParts[1]) : separateCamelCase(nameWithoutExtension);
 
                     return [
-                        newFileName,                       // Columna B
-                        columnCValue,                      // Columna C
-                        "N/A",                             // Columna D
-                        formattedCreateDate,               // Columna E
-                        formattedModifiedDate,             // Columna F
-                        1,                                 // Columna G
-                        pageCount,                         // Columna H
-                        extension,                         // Columna I
-                        `${sizeInKB.toFixed(2)} KB`,       // Columna J
-                        item.name || "Sin nombre"          // Columna K
+                        newFileName,
+                        columnCValue,
+                        "N/A",
+                        formattedCreateDate,
+                        formattedModifiedDate,
+                        1,
+                        pageCount,
+                        extension,
+                        `${sizeInKB.toFixed(2)} KB`,
+                        item.name || "Sin nombre"
                     ];
                 });
 
@@ -349,6 +353,45 @@
                     }
                 });
             });
+        }
+
+        async function formatDatesInRange() {
+            try {
+                await officeReady;
+                await Excel.run(async context => {
+                    const sheet = context.workbook.worksheets.getActiveWorksheet();
+                    const range = sheet.getRange("E10:F29");
+                    range.load("values");
+                    await context.sync();
+
+                    const values = range.values;
+                    for (let row = 0; row < values.length; row++) {
+                        for (let col = 0; col < values[row].length; col++) {
+                            const cellValue = values[row][col];
+                            if (cellValue) {
+                                try {
+                                    const date = new Date(cellValue);
+                                    if (!isNaN(date.getTime())) {
+                                        const formattedDate = formatDate(date);
+                                        values[row][col] = formattedDate;
+                                    } else {
+                                        console.warn(`Valor no es una fecha válida en E${10 + row}:F${10 + row}: "${cellValue}"`);
+                                    }
+                                } catch (error) {
+                                    console.warn(`Error al convertir fecha en E${10 + row}:F${10 + row}: "${cellValue}"`, error);
+                                }
+                            }
+                        }
+                    }
+
+                    range.values = values;
+                    await context.sync();
+                    document.getElementById("status").innerHTML = "Formato de fechas aplicado en E10:F29.";
+                });
+            } catch (error) {
+                document.getElementById("status").innerHTML = `Error al formatear fechas: ${error.message}`;
+                console.error("Error en formatDatesInRange:", error);
+            }
         }
     </script>
 </body>
