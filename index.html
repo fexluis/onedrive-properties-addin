@@ -14,7 +14,7 @@
     </style>
 </head>
 <body>
-    <h2>Complemento de Prueba v3</h2>
+    <h2>Complemento de Prueba v2</h2>
     <button id="runButton">Escribir en A1</button>
     <button id="getFolderIdButton">Listar Archivos en Excel</button>
     <div id="status">Cargando Office.js...</div>
@@ -142,7 +142,10 @@
         }
 
         function formatDate(date) {
-            return `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getFullYear()}`;
+            const year = date.getFullYear().toString();
+            const month = (date.getMonth() + 1).toString().padStart(2, '0');
+            const day = date.getDate().toString().padStart(2, '0');
+            return `${year}${month}${day}`; // Formato YYYYMMDD, e.g., "20241201"
         }
 
         function showWaitingGif(message) {
@@ -175,7 +178,6 @@
             }
         }
 
-        // Nueva función para separar palabras basadas en mayúsculas
         function separateCamelCase(text) {
             return text.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/([A-Z])([A-Z][a-z])/g, '$1 $2');
         }
